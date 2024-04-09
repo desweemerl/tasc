@@ -1,0 +1,9 @@
+{application, tasc, [
+    {description, "tasc (Task scheduler)"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {modules, []},
+    {applications, [kernel, stdlib]},
+    {mod, {tasc_app, []}},
+    {env, []}
+]}.
