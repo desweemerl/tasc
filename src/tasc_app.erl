@@ -28,14 +28,7 @@
 
 -spec start(_, _) -> {ok, pid()}.
 start(_, _) ->
-    Config =
-        case application:get_env(tasc, config) of
-            {ok, Value} ->
-                Value;
-            _ ->
-                []
-        end,
-
+    Config = application:get_all_env(tasc),
     ?INFO("starting application tasc", #{config => Config}),
     tasc_sup:start_link(Config).
 
