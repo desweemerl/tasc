@@ -23,15 +23,15 @@
     | stop
     | {stop, Message :: any()}.
 
--spec schedule(Task :: module(), TaskId :: task_id(), Args :: [any()]) ->
+-spec schedule(TaskModule :: module(), TaskId :: task_id(), Args :: [any()]) ->
     ok | {error, Cause :: atom()}.
-schedule(Task, TaskId, Args) ->
-    gen_server:call(Task, {schedule, TaskId, Args}).
+schedule(TaskModule, TaskId, Args) ->
+    gen_server:call(TaskModule, {schedule, TaskId, Args}).
 
--spec unschedule(Task :: module(), TaskId :: task_id()) ->
+-spec unschedule(TaskModule :: module(), TaskId :: task_id()) ->
     ok | {error, Cause :: atom()}.
-unschedule(Task, TaskId) ->
-    gen_server:call(Task, {unschedule, TaskId}).
+unschedule(TaskModule, TaskId) ->
+    gen_server:call(TaskModule, {unschedule, TaskId}).
 
 -spec start_scheduler(TaskModule :: module(), Settings :: settings()) -> ok.
 start_scheduler(TaskModule, Settings) ->

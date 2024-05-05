@@ -185,7 +185,7 @@ merge_shares([Share1 | [Share2 | Shares]]) ->
     merge_shares([NewShare | Shares]).
 
 -spec handle_call(
-    Call :: {schedule, TaskId :: any(), Args :: [any()]},
+    Call :: {schedule, TaskId :: any(), Args :: [any()]} | {unschedule, TaskId :: any()},
     From :: {pid(), any()},
     State :: state()
 ) -> {reply, ok | {error, Cause :: atom()}, state()}.
@@ -195,6 +195,9 @@ handle_call(
     #state{task_module = TaskModule, tasks = Tasks, interval = Interval} = State
 ) ->
     erlang:spawn(?MODULE, init_task, [TaskModule, Tasks, TaskId, From, Interval, Args]),
+    {reply, ok, State};
+handle_call({unschedule, TaskId}, {From, _}, #state{pg_scope = PgScope} = State) ->
+    pg:leave(PgScope, TaskId, From),
     {reply, ok, State}.
 
 init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
@@ -222,7 +225,7 @@ init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
                 {ok, TaskState} ->
                     {Task#task.share#share{state = TaskState}, false};
                 {reschedule, TaskState, TaskInterval} when
-                    is_integer(TaskInterval), TaskInterval > 0
+                    is_integer(TaskInterval), TaskInterval >= 0
                 ->
                     {
                         Task#task.share#share{
@@ -239,6 +242,7 @@ init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
             ?ERROR("failed to init task", Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId, from => From, args => Args
             }),
+            erlang:send(From, {error, tasc, init_failed, TaskId}),
             erlang:raise(Class, Reason, Stacktrace)
     end.
 
@@ -259,11 +263,11 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
                 {continue, Message, NewTaskState} ->
                     broadcast(PgScope, TaskId, Message),
                     Task#task.share#share{last_update = erlang:timestamp(), state = NewTaskState};
-                {reschedule, NewTaskState, Interval} ->
+                {reschedule, NewTaskState, Interval} when Interval >= 0 ->
                     Task#task.share#share{
                         last_update = erlang:timestamp(), state = NewTaskState, interval = Interval
                     };
-                {reschedule, Message, NewTaskState, Interval} ->
+                {reschedule, Message, NewTaskState, Interval} when Interval >= 0 ->
                     broadcast(PgScope, TaskId, Message),
                     Task#task.share#share{
                         last_update = erlang:timestamp(), state = NewTaskState, interval = Interval
@@ -276,7 +280,8 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
             end,
         case NewShare of
             undefined ->
-                ok;
+                LeavePids = pg:get_members(PgScope, TaskId),
+                pg:leave(PgScope, TaskId, LeavePids);
             _ ->
                 NewTask = schedule_or_cancel(TaskModule, TaskId, CancelledTask#task{
                     share = NewShare
@@ -292,6 +297,9 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
             ?ERROR("failed to run task", Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId
             }),
+            ErrorPids = pg:get_members(PgScope, TaskId),
+            broadcast(ErrorPids, {error, tasc, run_failed, TaskId}),
+            pg:leave(PgScope, TaskId, ErrorPids),
             erlang:raise(Class, Reason, Stacktrace)
     end.
 
@@ -436,7 +444,7 @@ handle_cast(
         LocalMembers = pg:get_local_members(PgScope, TaskId),
         case lists:member(From, LocalMembers) of
             true ->
-                erlang:send(From, {error, already_scheduled, TaskId});
+                erlang:send(From, {error, tasc, already_scheduled, TaskId});
             false ->
                 Task = ets:lookup_element(Tasks, TaskId, 2, #task{share = Share}),
                 NewTask =

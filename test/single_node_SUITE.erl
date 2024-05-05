@@ -101,7 +101,7 @@ args_test(_Config) ->
 duplicate_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
-    helper:assert_receive({error, already_scheduled, ?FUNCTION_NAME}, 1000),
+    helper:assert_receive({error, tasc, already_scheduled, ?FUNCTION_NAME}, 1000),
     ok.
 
 one_proc_one_node_test(_Config) ->
