@@ -1,3 +1,22 @@
+%% MIT License
+%%
+%% Copyright (c) 2024 Ludovic Desweemer
+%%
+%% Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+%% and associated documentation files (the "Software"), to deal in the Software without restriction,
+%% including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+%% and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+%% subject to the following conditions:
+%%
+%% The above copyright notice and this permission notice shall be included in all copies or substantial
+%% portions of the Software.
+%%
+%% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+%% LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+%% IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+%% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+%% OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 -module(multi_nodes_SUITE).
 
 -include_lib("stdlib/include/assert.hrl").
@@ -23,20 +42,6 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     NodePeers = proplists:get_value(node_peers, Config),
     stop_nodes(NodePeers).
-
-wait_connections([], _) ->
-    ok;
-wait_connections(Nodes, Timeout) ->
-    net_kernel:monitor_nodes(true),
-    ExcludedNodes = nodes(known),
-    NewNodes = [N || N <- Nodes, not lists:member(N, ExcludedNodes)],
-
-    receive
-        {nodeup, Node} ->
-            wait_connections([N || N <- NewNodes, N =/= Node], Timeout)
-    after Timeout ->
-        error(nodes_not_connected)
-    end.
 
 init_node() ->
     helper:configure_logger("multi_nodes_SUITE.log"),
@@ -71,8 +76,14 @@ start_nodes(Num) ->
     ],
 
     Nodes = [N || {N, _} <- NodePeers],
+
     ct:print("connecting nodes each other ~p", [Nodes]),
-    [true = rpc:call(N, net_kernel, connect_node, [N]) || N <- Nodes],
+    [
+        [true = rpc:call(N, net_kernel, connect_node, [M]) || M <- Nodes, M =/= N]
+     || N <- Nodes
+    ],
+    R = [{N, rpc:call(N, erlang, nodes, [])} || N <- Nodes],
+    ct:print("result ~p", [R]),
 
     ct:print("initializing ~p nodes...", [Num]),
     [ok = rpc:call(N, ?MODULE, init_node, []) || {N, _} <- NodePeers],
@@ -94,7 +105,7 @@ wait_disconnections([Node | Nodes], Timeout) ->
     end.
 
 stop_nodes(NodePeers) ->
-    ct:print("stop_nodes ~p", [NodePeers]),
+    ct:print("stopping nodes ~p...", [NodePeers]),
     [peer:stop(P) || {_, P} <- NodePeers].
 
 spawn_node(NodeNum) when is_integer(NodeNum) ->
@@ -128,7 +139,8 @@ remote_three_nodes() ->
 
     %% Check messages on all nodes.
     Seq = lists:seq(0, 10),
-    [helper:assert_receive(C, 1000) || C <- Seq],
+    %% Don't be strict on the first assertion because nodes need to be synced.
+    helper:assert_receive(Seq, [{0, 200}, {90, 50}]),
 
     %% Stop the scheduler on each node and check that no more messages are sent.
     tasc:stop_scheduler(task_mock),
@@ -149,7 +161,8 @@ remote_three_nodes_one_node_disconnection(NodeDisconnected, Nodes) ->
 
     %% Check messages on all nodes.
     Seq1 = lists:seq(0, 3),
-    [helper:assert_receive(C, 1000) || C <- Seq1],
+    %% Don't be strict on the first assertion because nodes need to be synced.
+    helper:assert_receive(Seq1, [{0, 200}, {90, 50}]),
 
     %% Disconnect first node. Scheduler must not preventing task from being running
     %% on the disconnect node and on the remaining cluster.
@@ -161,7 +174,8 @@ remote_three_nodes_one_node_disconnection(NodeDisconnected, Nodes) ->
             []
     end,
     Seq2 = lists:seq(4, 10),
-    [helper:assert_receive(C, 1000) || C <- Seq2],
+    %% Don't be strict on the first assertion because nodes need to be synced.
+    helper:assert_receive(Seq2, [{0, 200}, {90, 50}]),
 
     %% Reconnect first node. Scheduler prevents task from being executed on multiple nodes.
     case node() of
@@ -172,7 +186,8 @@ remote_three_nodes_one_node_disconnection(NodeDisconnected, Nodes) ->
             []
     end,
     Seq3 = lists:seq(11, 15),
-    [helper:assert_receive(C, 1000) || C <- Seq3],
+    %% Don't be strict on the first assertion because nodes need to be resynced.
+    helper:assert_receive(Seq3, [{0, 200}, {90, 50}]),
 
     %% Stop the scheduler on each node and check that no more messages are sent.
     tasc:stop_scheduler(task_mock),
