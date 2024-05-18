@@ -1,0 +1,15 @@
+name: Tasc CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: erlang:26.2.5
+    steps:
+    - uses: actions/checkout@v4
+    - name: Compile
+      run: rebar3 compile
+    - name: Run tests
+      run: rebar3 ct --sname master -v
