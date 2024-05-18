@@ -1,5 +1,7 @@
 # tasc (Task Scheduler)
 
+![Build Status](https://github.com/desweemerl/tasc/actions/workflows/build-test.yml/badge.svg)
+
 Copyright(c) 2024 Ludovic Desweemer
 
 **Version:** 0.1.0
