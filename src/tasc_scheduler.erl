@@ -29,7 +29,7 @@
     handle_info/2,
     handle_call/3
 ]).
--export([init/1]).
+-export([init/1, terminate/2]).
 
 -export([init_task/6, run_task/5]).
 
