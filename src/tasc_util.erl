@@ -29,7 +29,8 @@ proc_ids(TaskModule) ->
     Scheduler = format_module(TaskModule, scheduler),
     {PgScope, Scheduler}.
 
--spec config_to_children_specs([config()] | {TaskModule :: module(), Settings :: settings()}) -> [supervisor:child_spec()].
+-spec config_to_children_specs([config()] | {TaskModule :: module(), Settings :: settings()}) ->
+    [supervisor:child_spec()].
 config_to_children_specs([]) ->
     [];
 config_to_children_specs([Config | Configs]) ->

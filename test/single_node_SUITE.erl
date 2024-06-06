@@ -83,7 +83,9 @@ groups() ->
             [sequence],
             [
                 args_test,
+                init_failed_test,
                 duplicate_test,
+                run_failed_test,
                 continue_stop_test,
                 continue_message_stop_test,
                 continue_message_stop_message_test,
@@ -115,11 +117,23 @@ args_test(_Config) ->
     helper:assert_receive(0, 90, 50),
     ok.
 
+init_failed_test(_Config) ->
+    ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [-1]),
+    helper:assert_receive({error, tasc, init_failed, negative_counter, ?FUNCTION_NAME}, 100),
+    ok.
+
 duplicate_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
     helper:assert_receive({error, tasc, already_scheduled, ?FUNCTION_NAME}, 100),
     ok.
+
+run_failed(Counter, LastCounter, Limit, Interval, Timeout) ->
+    ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [Counter, message, LastCounter, stop, [], Limit]),
+    Seq = lists:seq(Counter, Limit),
+    [helper:assert_receive(C, Interval, Timeout) || C <- Seq],
+    helper:assert_receive({error, tasc, run_failed, limit_reached, ?FUNCTION_NAME}, 200),
+    helper:assert_not_receive(Timeout).
 
 schedule_continue_stop(Counter, LastCounter, Timeout) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [Counter, undefined, LastCounter, stop, []]),
@@ -154,6 +168,11 @@ schedule_reschedule_message_stop(Counter, Intervals, Gap, Timeout) ->
      || {N, I} <- lists:enumerate(0, MsgIntervals)
     ],
     helper:assert_not_receive(LastInterval + Timeout).
+
+run_failed_test(_Config) ->
+    Pids = spawn_procs(3, run_failed, [0, 10, 5, 90, 50]),
+    wait_for_procs(Pids, 1000),
+    ok.
 
 continue_stop_test(_Config) ->
     Pids = spawn_procs(3, schedule_continue_stop, [0, 5, 700]),

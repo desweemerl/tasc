@@ -30,19 +30,30 @@
 
 -record(state, {
     counter :: pos_integer(),
+    limit :: pos_integer() | undefined,
     action :: message | undefined,
     last_counter :: pos_integer() | undefined,
     last_action :: stop | stop_message | undefined,
     intervals = [] :: [pos_integer()]
 }).
 
+init(_, [-1], _, _) ->
+    error(negative_counter);
 init(TaskId, [], TaskState, TaskInterval) ->
     init(TaskId, [0, message, undefined, undefined, undefined], TaskState, TaskInterval);
 init(TaskId, [Counter], TaskState, TaskInterval) ->
     init(TaskId, [Counter, message, undefined, undefined, []], TaskState, TaskInterval);
-init(_, [Counter, Action, LastCounter, LastAction, Intervals], undefined, _) ->
+init(TaskId, [Counter, Action, LastCounter, LastAction, Intervals], TaskState, TaskInterval) ->
+    init(
+        TaskId,
+        [Counter, Action, LastCounter, LastAction, Intervals, undefined],
+        TaskState,
+        TaskInterval
+    );
+init(_, [Counter, Action, LastCounter, LastAction, Intervals, Limit], undefined, _) ->
     TaskState = #state{
         counter = Counter,
+        limit = Limit,
         action = Action,
         last_counter = LastCounter,
         last_action = LastAction,
@@ -57,12 +68,15 @@ run(
     #state{
         counter = Counter,
         action = Action,
+        limit = Limit,
         last_counter = LastCounter,
         last_action = LastAction,
         intervals = Intervals
     } = TaskState
 ) ->
     if
+        Counter > Limit ->
+            error(limit_reached);
         (LastCounter =:= Counter) and (LastAction =/= undefined) ->
             case LastAction of
                 stop ->

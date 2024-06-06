@@ -242,8 +242,7 @@ init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
             ?ERROR("failed to init task", Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId, from => From, args => Args
             }),
-            erlang:send(From, {error, tasc, init_failed, TaskId}),
-            erlang:raise(Class, Reason, Stacktrace)
+            erlang:send(From, {error, tasc, init_failed, Reason, TaskId})
     end.
 
 run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
@@ -298,9 +297,8 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
                 task_module => TaskModule, task_id => TaskId
             }),
             ErrorPids = pg:get_members(PgScope, TaskId),
-            broadcast(ErrorPids, {error, tasc, run_failed, TaskId}),
-            pg:leave(PgScope, TaskId, ErrorPids),
-            erlang:raise(Class, Reason, Stacktrace)
+            broadcast(ErrorPids, {error, tasc, run_failed, Reason, TaskId}),
+            pg:leave(PgScope, TaskId, ErrorPids)
     end.
 
 -spec handle_info(
