@@ -125,7 +125,7 @@ init_failed_test(_Config) ->
 duplicate_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
-    helper:assert_receive({error, tasc, already_scheduled, ?FUNCTION_NAME}, 100),
+    helper:assert_receive({error, tasc, init_failed, already_scheduled, ?FUNCTION_NAME}, 100),
     ok.
 
 run_failed(Counter, LastCounter, Limit, Interval, Timeout) ->

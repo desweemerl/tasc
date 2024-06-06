@@ -188,7 +188,7 @@ merge_shares([Share1 | [Share2 | Shares]]) ->
     Call :: {schedule, TaskId :: any(), Args :: [any()]} | {unschedule, TaskId :: any()},
     From :: {pid(), any()},
     State :: state()
-) -> {reply, ok | {error, Cause :: atom()}, state()}.
+) -> {reply, ok, state()}.
 handle_call(
     {schedule, TaskId, Args},
     {From, _},
@@ -239,7 +239,7 @@ init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
         gen_server:cast(TaskModule, {schedule, TaskId, From, NewShare, Reschedule})
     catch
         Class:Reason:Stacktrace ->
-            ?ERROR("failed to init task", Reason, Stacktrace, #{
+            ?ERROR("failed to init task", Class, Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId, from => From, args => Args
             }),
             erlang:send(From, {error, tasc, init_failed, Reason, TaskId})
@@ -293,7 +293,7 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
         end
     catch
         Class:Reason:Stacktrace ->
-            ?ERROR("failed to run task", Reason, Stacktrace, #{
+            ?ERROR("failed to run task", Class, Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId
             }),
             ErrorPids = pg:get_members(PgScope, TaskId),
@@ -442,7 +442,7 @@ handle_cast(
         LocalMembers = pg:get_local_members(PgScope, TaskId),
         case lists:member(From, LocalMembers) of
             true ->
-                erlang:send(From, {error, tasc, already_scheduled, TaskId});
+                erlang:send(From, {error, tasc, init_failed, already_scheduled, TaskId});
             false ->
                 Task = ets:lookup_element(Tasks, TaskId, 2, #task{share = Share}),
                 NewTask =
