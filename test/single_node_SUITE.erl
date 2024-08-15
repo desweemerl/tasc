@@ -91,7 +91,9 @@ groups() ->
                 continue_message_stop_message_test,
                 continue_message_stop_crash_test,
                 reschedule_stop_test,
-                reschedule_message_stop_test
+                reschedule_message_stop_test,
+                metrics_module_not_found_test,
+                metrics_test
             ]
         }
     ].
@@ -126,6 +128,26 @@ duplicate_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
     helper:assert_receive({error, tasc, init_failed, already_scheduled, ?FUNCTION_NAME}, 100),
+    ok.
+
+metrics_module_not_found_test(_Config) ->
+    Metrics = tasc:metrics(unknown),
+    ?assertEqual(Metrics, {error, not_found}, "error not_found is not returned"),
+    ok.
+
+metrics_test(_Config) ->
+    ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
+    Pid = whereis(task_mock),
+    {ok, Metrics} = tasc:metrics(task_mock),
+    QueueLen = maps:get(message_queue_len, Metrics),
+    ?assert(
+        is_integer(QueueLen) and (QueueLen >= 0), "message_queue_len is not a positive integer"
+    ),
+    ?assertEqual(
+        Metrics,
+        #{count => 1, message_queue_len => QueueLen, pid => Pid},
+        "metrics are not correctly returned"
+    ),
     ok.
 
 run_failed(Counter, LastCounter, Limit, Interval, Timeout) ->

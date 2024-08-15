@@ -23,6 +23,7 @@
 
 -export([start_scheduler/2, stop_scheduler/1]).
 -export([schedule/3, unschedule/2]).
+-export([metrics/1]).
 
 -callback init(
     TaskId :: task_id(),
@@ -67,3 +68,39 @@ stop_scheduler(TaskModule) ->
 stop_child(Id) ->
     ok = supervisor:terminate_child(tasc_sup, Id),
     supervisor:delete_child(tasc_sup, Id).
+
+count_tasks(TaskModule) ->
+    case ets:info(TaskModule) of
+        undefined ->
+            error(not_found);
+        Info ->
+            proplists:get_value(size, Info)
+    end.
+
+proc_info(TaskModule) ->
+    case whereis(TaskModule) of
+        undefined ->
+            error(not_found);
+        Pid ->
+            Info = process_info(Pid),
+            #{
+                pid => Pid,
+                message_queue_len => proplists:get_value(message_queue_len, Info)
+            }
+    end.
+
+-spec metrics(TaskModule :: module()) -> {ok, map()} | {error, not_found}.
+metrics(TaskModule) ->
+    try
+        ProcInfo = proc_info(TaskModule),
+        Count = count_tasks(TaskModule),
+        {ok, maps:put(count, Count, ProcInfo)}
+    catch
+        error:not_found ->
+            {error, not_found};
+        Class:Reason:StackTrace ->
+            ?ERROR("failed to collect metrics", Class, Reason, StackTrace, #{
+                task_module => TaskModule
+            }),
+            {error, Reason}
+    end.
