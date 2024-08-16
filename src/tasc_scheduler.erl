@@ -394,6 +394,8 @@ handle_info(
         NewTask = Task#task{pid = NewPid, timer_ref = NewTimerRef},
         ets:insert(Tasks, {TaskId, NewTask})
     catch
+        error:badarg ->
+            ok;
         Class:Reason:Stacktrace ->
             ?ERROR("failed to trigger task", Class, Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId
