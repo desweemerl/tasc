@@ -242,7 +242,7 @@ init_task(TaskModule, Tasks, TaskId, From, Interval, Args) ->
             ?ERROR("failed to init task", Class, Reason, Stacktrace, #{
                 task_module => TaskModule, task_id => TaskId, from => From, args => Args
             }),
-            erlang:send(From, {error, tasc, init_failed, Reason, TaskId})
+            erlang:send(From, {error, tasc, init_failed, Reason, {TaskModule, TaskId}})
     end.
 
 run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
@@ -297,7 +297,7 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
                 task_module => TaskModule, task_id => TaskId
             }),
             ErrorPids = pg:get_members(PgScope, TaskId),
-            broadcast(ErrorPids, {error, tasc, run_failed, Reason, TaskId}),
+            broadcast(ErrorPids, {error, tasc, run_failed, Reason, {TaskModule, TaskId}}),
             pg:leave(PgScope, TaskId, ErrorPids)
     end.
 
@@ -444,7 +444,9 @@ handle_cast(
         LocalMembers = pg:get_local_members(PgScope, TaskId),
         case lists:member(From, LocalMembers) of
             true ->
-                erlang:send(From, {error, tasc, init_failed, already_scheduled, TaskId});
+                erlang:send(
+                    From, {error, tasc, init_failed, already_scheduled, {TaskModule, TaskId}}
+                );
             false ->
                 Task = ets:lookup_element(Tasks, TaskId, 2, #task{share = Share}),
                 NewTask =

@@ -121,13 +121,17 @@ args_test(_Config) ->
 
 init_failed_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [-1]),
-    helper:assert_receive({error, tasc, init_failed, negative_counter, ?FUNCTION_NAME}, 100),
+    helper:assert_receive(
+        {error, tasc, init_failed, negative_counter, {task_mock, ?FUNCTION_NAME}}, 100
+    ),
     ok.
 
 duplicate_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [10]),
-    helper:assert_receive({error, tasc, init_failed, already_scheduled, ?FUNCTION_NAME}, 100),
+    helper:assert_receive(
+        {error, tasc, init_failed, already_scheduled, {task_mock, ?FUNCTION_NAME}}, 100
+    ),
     ok.
 
 metrics_module_not_found_test(_Config) ->
@@ -154,7 +158,9 @@ run_failed(Counter, LastCounter, Limit, Interval, Timeout) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [Counter, message, LastCounter, stop, [], Limit]),
     Seq = lists:seq(Counter, Limit),
     [helper:assert_receive(C, Interval, Timeout) || C <- Seq],
-    helper:assert_receive({error, tasc, run_failed, limit_reached, ?FUNCTION_NAME}, 200),
+    helper:assert_receive(
+        {error, tasc, run_failed, limit_reached, {task_mock, ?FUNCTION_NAME}}, 200
+    ),
     helper:assert_not_receive(Timeout).
 
 schedule_continue_stop(Counter, LastCounter, Timeout) ->
