@@ -67,11 +67,14 @@ start_link(TaskModule, PgScope, Settings) ->
 -spec init({TaskModule :: atom(), PgScope :: atom(), Settings :: settings()}) ->
     {ok, State :: state()}.
 init({TaskModule, PgScope, Settings}) ->
+    Interval = get_setting(interval, Settings, [pos_integer]),
+    Timeout = get_setting(timeout, Settings, [pos_integer, not_null]),
     ?INFO("starting scheduler", #{
-        task_module => TaskModule, pg_scope => PgScope, settings => Settings
+        task_module => TaskModule,
+        pg_scope => PgScope,
+        interval => Interval,
+        timeout => Timeout
     }),
-    Interval = get_setting(interval, Settings),
-    Timeout = get_setting(timeout, Settings),
 
     %% Do clean up before termination.
     process_flag(trap_exit, true),
@@ -88,13 +91,23 @@ init({TaskModule, PgScope, Settings}) ->
     },
     {ok, State}.
 
-get_setting(Key, Settings) ->
-    case proplists:is_defined(interval, Settings) of
+get_setting(Key, Settings, Checks) ->
+    case proplists:is_defined(Key, Settings) of
         true ->
-            proplists:get_value(interval, Settings);
+            Value = proplists:get_value(Key, Settings),
+            check_setting(Key, Value, Checks);
         false ->
-            error(missing_settings, Key)
+            error({missing_settings, Key})
     end.
+
+check_setting(_, Value, []) ->
+    Value;
+check_setting(Key, Value, [pos_integer | Checks]) when is_integer(Value) and (Value >= 0) ->
+    check_setting(Key, Value, Checks);
+check_setting(Key, Value, [not_null | Checks]) when is_integer(Value) and (Value =/= 0) ->
+    check_setting(Key, Value, Checks);
+check_setting(Key, Value, [Check | _]) ->
+    error({invalid_setting, Key, Value, Check}).
 
 terminate(shutdown, #state{tasks = Tasks, monitor_ref = MonitorRef}) ->
     %% Clear ets table.
@@ -386,7 +399,7 @@ handle_info(
 ) ->
     try
         Task = ets:lookup_element(Tasks, TaskId, 2),
-        ?DEBUG("trigger task", #{task_module => TaskModule, task_id => TaskId}),
+        ?DEBUG("trigger task", #{task_module => TaskModule, task_id => TaskId, timeout => Timeout}),
         NewPid = erlang:spawn(?MODULE, run_task, [
             TaskModule, PgScope, Tasks, TaskId, Task#task.share#share.state
         ]),

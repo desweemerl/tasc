@@ -34,6 +34,10 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     Config.
 
+init_per_testcase(bad_interval_test, Config) ->
+    Config;
+init_per_testcase(bad_timeout_test, Config) ->
+    Config;
 init_per_testcase(_TestCase, Config) ->
     Settings = [
         {interval, 100},
@@ -82,6 +86,8 @@ groups() ->
             task,
             [sequence],
             [
+                bad_interval_test,
+                bad_timeout_test,
                 args_test,
                 init_failed_test,
                 duplicate_test,
@@ -113,6 +119,46 @@ wait_for_procs(Pids, Timeout) ->
     after Timeout ->
         error(wait_for_procs_expired)
     end.
+
+bad_interval(Interval) ->
+    Settings = [
+        {interval, Interval},
+        {timeout, 10}
+    ],
+    tasc_sup:start_link([{task_mock, Settings}]).
+
+check_bad_setting({Pid, Ref}, Key, Value, Reason) ->
+    receive
+        {'DOWN', Ref, process, Pid,
+            {shutdown,
+                {failed_to_start_child, task_mock_scheduler, {
+                    {invalid_setting, Key, Value, Reason}, _
+                }}}} ->
+            ok
+    after 500 ->
+        ?assert(false, "error not raised or incorrect")
+    end.
+
+bad_timeout(Timeout) ->
+    Settings = [
+        {interval, 10},
+        {timeout, Timeout}
+    ],
+    tasc_sup:start_link([{task_mock, Settings}]).
+
+bad_interval_test(_Config) ->
+    PidRef1 = spawn_monitor(?MODULE, bad_interval, [-100]),
+    check_bad_setting(PidRef1, interval, -100, pos_integer),
+    PidRef2 = spawn_monitor(?MODULE, bad_interval, [wrong_type]),
+    check_bad_setting(PidRef2, interval, wrong_type, pos_integer).
+
+bad_timeout_test(_Config) ->
+    PidRef1 = spawn_monitor(?MODULE, bad_timeout, [-100]),
+    check_bad_setting(PidRef1, timeout, -100, pos_integer),
+    PidRef2 = spawn_monitor(?MODULE, bad_timeout, [0]),
+    check_bad_setting(PidRef2, timeout, 0, not_null),
+    PidRef3 = spawn_monitor(?MODULE, bad_timeout, [wrong_type]),
+    check_bad_setting(PidRef3, timeout, wrong_type, pos_integer).
 
 args_test(_Config) ->
     ok = tasc:schedule(task_mock, ?FUNCTION_NAME, [0]),

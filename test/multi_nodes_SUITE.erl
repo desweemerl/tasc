@@ -140,7 +140,7 @@ remote_three_nodes() ->
     %% Check messages on all nodes.
     Seq = lists:seq(0, 10),
     %% Don't be strict on the first assertion because nodes need to be synced.
-    helper:assert_receive(Seq, [{0, 200}, {90, 50}]),
+    helper:assert_receive(Seq, [{0, 200}, {90, 100}]),
 
     %% Stop the scheduler on each node and check that no more messages are sent.
     tasc:stop_scheduler(task_mock),
