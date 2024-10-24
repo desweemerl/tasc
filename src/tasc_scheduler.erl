@@ -275,11 +275,11 @@ run_task(TaskModule, PgScope, Tasks, TaskId, TaskState) ->
                 {continue, Message, NewTaskState} ->
                     broadcast(PgScope, TaskId, Message),
                     Task#task.share#share{last_update = erlang:timestamp(), state = NewTaskState};
-                {reschedule, NewTaskState, Interval} when Interval >= 0 ->
+                {reschedule, NewTaskState, Interval} when is_integer(Interval), Interval >= 0 ->
                     Task#task.share#share{
                         last_update = erlang:timestamp(), state = NewTaskState, interval = Interval
                     };
-                {reschedule, Message, NewTaskState, Interval} when Interval >= 0 ->
+                {reschedule, Message, NewTaskState, Interval} when is_integer(Interval), Interval >= 0 ->
                     broadcast(PgScope, TaskId, Message),
                     Task#task.share#share{
                         last_update = erlang:timestamp(), state = NewTaskState, interval = Interval
